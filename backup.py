@@ -1,4 +1,5 @@
 import os
+import threading
 import tkinter as tk
 import zipfile
 from tkinter import *
@@ -6,7 +7,7 @@ from tkinter.ttk import Treeview, Scrollbar
 from tkinter.filedialog import askdirectory
 from tkinter.messagebox import *
 from datetime import datetime
-
+from time import sleep
 class APP():
 
   def __init__(self):
@@ -24,6 +25,7 @@ class APP():
     x = (largura_tela - self.largura) / 2
     y = (altura_tela - self.altura) / 2
     self.janela.geometry("%dx%d+%d+%d" % (self.largura, self.altura, x, y))
+    self.janela.bind("<Control-o>", lambda event: self.carregar_DIR())
     menu = Menu(self.janela)
     self.janela.config(menu=menu)
     opcoes_menu = Menu(menu, tearoff=0)
@@ -93,13 +95,21 @@ class APP():
     tamanho=self.tree.get_children()
     if (len(tamanho) == 0):
       showerror(title="Backup", message="Nenhum diretório foi inserido.")
+      self.lblAviso.config(text="")
     else:
-      # comment: 
-    # end if
+      if len(self.lblDir_destino["text"]) == 0:
+        diretorio_destino = "BKP"
+      else:
+        diretorio_destino = self.lblDir_destino["text"]
       for item in self.tree.get_children():
         diretorio = self.tree.item(item, 'values')
         diretorio = diretorio[0]  # Índice 1 corresponde à coluna "Diretório"
-        self.compactar_arquivos(diretorio_destino=diretorio, diretorio_origem=diretorio)
+        self.janela.after(1000, self.aviso)
+        self.janela.update_idletasks()
+
+        self.executar_compactacao(diretorio_origem=diretorio, diretorio_destino=diretorio_destino)
+  def aviso(self):
+    self.lblAviso.config(text=f"Compactando diretorios, favox aguardar")
   def inserir_tree(self, path):
       # Verificar se o path já existe na treeview
       for item in self.tree.get_children():
@@ -120,7 +130,22 @@ class APP():
               self.tree.item(item, tags=('zebrado',))
           else:
               self.tree.item(item, tags=())
+
+  def executar_compactacao(self, diretorio_origem, diretorio_destino):
+      # Criar uma função interna para executar self.compactar_arquivos
+    def compactar():
+        # Chamar self.compactar_arquivos com os parâmetros fornecidos
+        self.compactar_arquivos(diretorio_origem, diretorio_destino)
+    # Criar uma thread para executar a compactação
+    thread = threading.Thread(target=compactar)
+    
+    # Iniciar a thread
+    thread.start()
+    # Aguardar até que a thread termine
+    thread.join()
+      
   def compactar_arquivos(self, diretorio_origem, diretorio_destino):
+    try:
       # Obter a data e hora atual
       agora = datetime.now()
       diretorio_origem = diretorio_origem
@@ -129,29 +154,34 @@ class APP():
       
       # Definindo o nome do arquivo ZIP
       nome_arquivo_zip = f"{nome}_{agora.strftime('%d%m%Y%H%M%S%f')}.zip"
-      print(nome_arquivo_zip)
+      nome_arquivo_zip = os.path.join(diretorio_destino, nome_arquivo_zip)
+      
+      # print(diretorio_destino)
 
-      # # Definindo o caminho do arquivo ZIP
-      # caminho_arquivo_zip = "/home/mardio/BKP/" + nome_arquivo_zip
+      # Definindo o caminho do arquivo ZIP
+      caminho_arquivo_zip = nome_arquivo_zip
 
-      # # Criando um objeto ZipFile
-      # with zipfile.ZipFile(caminho_arquivo_zip, "w") as zip:
+      # Criando um objeto ZipFile
+      with zipfile.ZipFile(caminho_arquivo_zip, "w") as zip:
           
-      #     # Percorrendo o diretório de origem
-      #     for raiz, diretorios, arquivos in os.walk(diretorio_origem):
-      #         for arquivo in arquivos:
+          # Percorrendo o diretório de origem
+          for raiz, diretorios, arquivos in os.walk(diretorio_origem):
+              for arquivo in arquivos:
                   
-      #             # Adicionando cada arquivo ao arquivo ZIP
-      #             caminho_completo_arquivo = os.path.join(raiz, arquivo)
-      #             zip.write(caminho_completo_arquivo, arcname=caminho_completo_arquivo.replace(diretorio_origem, ""))
+                  # Adicionando cada arquivo ao arquivo ZIP
+                  caminho_completo_arquivo = os.path.join(raiz, arquivo)
+                  zip.write(caminho_completo_arquivo, arcname=caminho_completo_arquivo.replace(diretorio_origem, ""))
 
-      # print("Diretório compactado com sucesso!")    
+
+    except Exception as e:
+      raise e
   def remover_diretorio_tree(self):
     selected_item = self.tree.selection()
     if selected_item:
         self.tree.delete(selected_item)
     else:
         showinfo("Nenhuma linha selecionada", "Por favor, selecione uma linha para excluir.")
+  
       
       
 if __name__ == "__main__":
